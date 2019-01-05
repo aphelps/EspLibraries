@@ -29,19 +29,24 @@ WiFiBase::WiFiBase(boolean useStored) {
   _allocatedKnownNetworks = 0;
   _knownNetworks = NULL;
 
+  _connectionTimeoutMs = DEFAULT_CONNECT_TIMEOUT;
+  _connectedIndex = INDEX_DISCONNECTED;
+
   /*
    * If there was a previously connected WiFi, add it as the default known
    * network.
    */
   if (useStored && WiFi.SSID()) {
-    DEBUG4_PRINTLN("WFB: adding default network");
-    addKnownNetwork("", "");
+    DEBUG4_VALUELN("WFB: adding default network ", WiFi.SSID());
+    addKnownNetwork("\0", "\0");
   }
 
   DEBUG5_PRINTLN("WFB: Created");
 }
 
 WiFiBase::~WiFiBase() {
+  DEBUG4_PRINTLN("WFB: freeing");
+  WiFi.disconnect();
   for (int i = 0; i < _numKnownNetworks; i++) {
     free(_knownNetworks[i].ssid);
     free(_knownNetworks[i].passwd);
@@ -161,6 +166,11 @@ bool WiFiBase::hasKnownNetwork(const char *ssid) {
   return false;
 }
 
+bool WiFiBase::setConnectTimeoutMs(unsigned long ms) {
+  _connectionTimeoutMs = ms;
+  return true;
+}
+
 /*******************************************************************************
  * Operational functions
  */
@@ -175,7 +185,7 @@ bool WiFiBase::startup() {
   }
 
   if (_connectToNetwork()) {
-
+    return true;
   }
 
   if (_accessPointEnabled) {
@@ -196,11 +206,84 @@ bool WiFiBase::_shutdownAccessPoint() {
 }
 
 /**
+ * Wait for connect to succeed or fail
+ * @return True if connected
+ */
+bool WiFiBase::_connectWait() {
+  uint8_t status;
+  DEBUG4_PRINTLN("WFB: _connectWait");
+  unsigned long start = millis();
+  while (true) {
+    status = WiFi.status();
+    if (status == WL_CONNECTED) {
+      DEBUG4_PRINTLN("WFB: connect succeeded");
+      return true;
+    }
+    if (status == WL_CONNECT_FAILED) {
+      DEBUG4_VALUELN("WFB: connect failed ", status);
+      return false;
+    }
+    if (millis() - start > _connectionTimeoutMs) {
+      DEBUG4_PRINTLN("WFB: connect timeout")
+      esp_wifi_disconnect();
+      return false;
+    }
+    delay(100);
+  };
+}
+
+/**
+ * @return Whether WiFiBase is connected to a network
+ */
+bool WiFiBase::connected() {
+  return (_connectedIndex != INDEX_DISCONNECTED);
+}
+
+void WiFiBase::_setConnected(uint8_t index) {
+  _connectedIndex = index;
+}
+
+void WiFiBase::_setDisconnected() {
+  _connectedIndex = INDEX_DISCONNECTED;
+}
+
+/**
  * Iterate over any known networks and connect to the first one possible.
  *
  * @return Whether this connected to a known network
  */
 bool WiFiBase::_connectToNetwork() {
+  int index = 0;
 
+  if (WiFi.status() == WL_CONNECTED) {
+    DEBUG3_PRINTLN("WFB: already connected");
+    return true;
+  }
+
+  if (_knownNetworks[index].ssid[index] == '\0') {
+    /* This indicates to try the ssid stored via the Esp SDK */
+    DEBUG3_PRINTLN("WFB: attempting stored network");
+    WiFi.begin();
+    if (_connectWait()) {
+      _setConnected(index);
+      return true;
+    }
+
+    index++;
+  }
+
+  /* Iterate over remaining networks and attempt connections */
+  for (; index < _numKnownNetworks; index++) {
+    DEBUG3_VALUELN("WFB: Connect ", _knownNetworks[index].ssid);
+    WiFi.begin(_knownNetworks[index].ssid, _knownNetworks[index].passwd);
+    if (_connectWait()) {
+      _setConnected(index);
+      return true;
+    }
+  }
+
+  DEBUG3_PRINTLN("WFB: Failed connect");
+
+  _setDisconnected();
   return false;
 }

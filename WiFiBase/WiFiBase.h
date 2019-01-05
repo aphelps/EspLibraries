@@ -25,6 +25,8 @@
 #ifndef WIFIBASE_H
 #define WIFIBASE_H
 
+#include <Ticker.h>
+
 #include <WiFiManager.h>
 
 struct network {
@@ -46,10 +48,13 @@ class WiFiBase {
     int numKnownNetworks();
     bool hasKnownNetwork(const char *ssid);
 
+    bool setConnectTimeoutMs(unsigned long ms);
+
     /* Start WiFiBase */
     bool startup();
+    bool connected();
 
-  private:
+  protected:
     bool _running;
     bool _background;
 
@@ -67,7 +72,17 @@ class WiFiBase {
     uint8_t _numKnownNetworks;
     uint16_t _allocatedKnownNetworks;
     struct network *_knownNetworks;
+
+    const uint8_t INDEX_DISCONNECTED = (uint8_t)-1;
+
+    const unsigned long DEFAULT_CONNECT_TIMEOUT = 10 * 1000;
+    unsigned long _connectionTimeoutMs = 5*1000;
+    uint8_t _connectedIndex;
     bool _connectToNetwork();
+    Ticker connectStateTicker;
+    bool _connectWait();
+    void _setConnected(uint8_t index);
+    void _setDisconnected();
 
     /* Over-the-air updates */
     uint16_t _updatePort;

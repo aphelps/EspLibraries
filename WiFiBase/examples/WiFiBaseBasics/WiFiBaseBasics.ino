@@ -14,6 +14,13 @@
 
 #include <WiFiBase.h>
 
+#ifndef USE_SSID
+#define USE_SSID "unknown"
+#endif
+#ifndef USE_PASSWD
+#define USE_PASSWD "unknown"
+#endif
+
 #define STATUS_LED 23
 
 WiFiBase *wfb;
@@ -30,14 +37,17 @@ void setup() {
   digitalWrite(BUILTIN_LED, LOW);
   digitalWrite(STATUS_LED, LOW);
 
-  wfb = new WiFiBase();
+  wfb = new WiFiBase(false);
+  wfb->addKnownNetwork(USE_SSID, USE_PASSWD);
   wfb->startup();
 }
 
 bool value = 1;
 void loop() {
-  // put your main code here, to run repeatedly:
-  digitalWrite(STATUS_LED, value);
-  value = !value;
-  delay(500);
+  if (wfb->connected()) {
+    // put your main code here, to run repeatedly:
+    digitalWrite(STATUS_LED, value);
+    value = !value;
+    delay(500);
+  }
 }
