@@ -71,6 +71,8 @@ bool WiFiBase::configureAccessPoint(const char *ssid, const char *passwd) {
     DEBUG_ERR("WFB: access point is active");
     return false;
   }
+  DEBUG3_VALUE("WFB: config AP ", ssid);
+  DEBUG3_VALUELN(" ", passwd);
   _APSsid = ssid;
   _APPasswd = passwd;
   _accessPointEnabled = true;
@@ -152,18 +154,27 @@ int WiFiBase::numKnownNetworks() {
 }
 
 /**
+ * Lookup the index of a known network
+ * @param ssid
+ * @return index of network or INDEX_DISCONNECTED
+ */
+int WiFiBase::lookupKnownNetwork(const char *ssid) {
+  for (int i = 0; i < _numKnownNetworks; i++) {
+    if (strcmp(_knownNetworks[i].ssid, ssid) == 0) {
+      return i;
+    }
+  }
+
+  return INDEX_DISCONNECTED;
+}
+
+/**
  * Check if a given ssid is included in the known networks list
  * @param ssid  Name of network to lookup
  * @return      Whether the network is known
  */
 bool WiFiBase::hasKnownNetwork(const char *ssid) {
-  for (int i = 0; i < _numKnownNetworks; i++) {
-    if (strcmp(_knownNetworks[i].ssid, ssid) == 0) {
-      return true;
-    }
-  }
-
-  return false;
+  return (lookupKnownNetwork(ssid) != INDEX_DISCONNECTED);
 }
 
 bool WiFiBase::setConnectTimeoutMs(unsigned long ms) {
@@ -189,18 +200,11 @@ bool WiFiBase::startup() {
   }
 
   if (_accessPointEnabled) {
-
+    /* Failed to connect, launch in AP mode with a config portal */
+    if (_startupAccessPoint()) {
+      return true;
+    }
   }
-
-  return false;
-}
-
-bool WiFiBase::_startupAccessPoint() {
-
-  return false;
-}
-
-bool WiFiBase::_shutdownAccessPoint() {
 
   return false;
 }
@@ -260,30 +264,69 @@ bool WiFiBase::_connectToNetwork() {
     return true;
   }
 
-  if (_knownNetworks[index].ssid[index] == '\0') {
-    /* This indicates to try the ssid stored via the Esp SDK */
-    DEBUG3_PRINTLN("WFB: attempting stored network");
-    WiFi.begin();
-    if (_connectWait()) {
-      _setConnected(index);
-      return true;
+  if (_numKnownNetworks) {
+    if (_knownNetworks[index].ssid[index] == '\0') {
+      /* This indicates to try the ssid stored via the Esp SDK */
+      DEBUG3_PRINTLN("WFB: attempting stored network");
+      WiFi.begin();
+      if (_connectWait()) {
+        _setConnected(index);
+        return true;
+      }
+
+      index++;
     }
 
-    index++;
-  }
-
-  /* Iterate over remaining networks and attempt connections */
-  for (; index < _numKnownNetworks; index++) {
-    DEBUG3_VALUELN("WFB: Connect ", _knownNetworks[index].ssid);
-    WiFi.begin(_knownNetworks[index].ssid, _knownNetworks[index].passwd);
-    if (_connectWait()) {
-      _setConnected(index);
-      return true;
+    /* Iterate over remaining networks and attempt connections */
+    for (; index < _numKnownNetworks; index++) {
+      DEBUG3_VALUELN("WFB: Connect ", _knownNetworks[index].ssid);
+      WiFi.begin(_knownNetworks[index].ssid, _knownNetworks[index].passwd);
+      if (_connectWait()) {
+        _setConnected(index);
+        return true;
+      }
     }
   }
 
   DEBUG3_PRINTLN("WFB: Failed connect");
-
   _setDisconnected();
+  return false;
+}
+
+/**
+ * Start as access point with a config portal to allow manual network
+ * configuration
+ *
+ * TODO: It would be good to switch to something simpler than WiFiManager for
+ * this, or to write a custom variant.
+ *
+ * @return Whether a connection was configured via the config portal
+ */
+bool WiFiBase::_startupAccessPoint() {
+  DEBUG3_PRINTLN("WFB: starting AP")
+  WiFiManager wifiManager;
+  if (!wifiManager.startConfigPortal(_APSsid, _APPasswd)) {
+    DEBUG_ERR("WFB: Config portal failed");
+    return false;
+  }
+
+  DEBUG3_VALUE("WFB: Config connected ", wifiManager.getSSID());
+  DEBUG3_VALUELN(" ", wifiManager.getPassword());
+
+  /* Check if the connected SSID is in the known list, if not then add it */
+  int index = lookupKnownNetwork(wifiManager.getSSID().c_str());
+  if (index == INDEX_DISCONNECTED) {
+    addKnownNetwork(wifiManager.getSSID().c_str(),
+                    wifiManager.getPassword().c_str());
+    index = _numKnownNetworks - 1;
+  }
+
+  _setConnected(index);
+
+  return true;
+}
+
+bool WiFiBase::_shutdownAccessPoint() {
+
   return false;
 }

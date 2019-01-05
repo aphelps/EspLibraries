@@ -43,9 +43,11 @@ class WiFiBase {
     bool configureAccessPoint(const char *ssid, const char *passwd);
     bool disableAccessPoint();
 
-    const uint8_t MAX_KNOWN_NETWORKS = 255;
+    static const uint8_t INDEX_DISCONNECTED = (uint8_t)-1;
+    static const uint8_t MAX_KNOWN_NETWORKS = 255;
     bool addKnownNetwork(const char *ssid, const char *passwd);
     int numKnownNetworks();
+    int lookupKnownNetwork(const char *ssid);
     bool hasKnownNetwork(const char *ssid);
 
     bool setConnectTimeoutMs(unsigned long ms);
@@ -73,9 +75,8 @@ class WiFiBase {
     uint16_t _allocatedKnownNetworks;
     struct network *_knownNetworks;
 
-    const uint8_t INDEX_DISCONNECTED = (uint8_t)-1;
 
-    const unsigned long DEFAULT_CONNECT_TIMEOUT = 10 * 1000;
+    static const unsigned long DEFAULT_CONNECT_TIMEOUT = 10 * 1000;
     unsigned long _connectionTimeoutMs = 5*1000;
     uint8_t _connectedIndex;
     bool _connectToNetwork();

@@ -14,11 +14,15 @@
 
 #include <WiFiBase.h>
 
-#ifndef USE_SSID
-#define USE_SSID "unknown"
-#endif
 #ifndef USE_PASSWD
-#define USE_PASSWD "unknown"
+  #define USE_PASSWD ""
+#endif
+
+#ifndef CONFIG_SSID
+  #define CONFIG_SSID "Esp32_WiFiBase"
+#endif
+#ifndef CONFIG_PASSWD
+  #define CONFIG_PASSWD "12345678"
 #endif
 
 #define STATUS_LED 23
@@ -38,7 +42,11 @@ void setup() {
   digitalWrite(STATUS_LED, LOW);
 
   wfb = new WiFiBase(false);
+#ifdef USE_SSID
   wfb->addKnownNetwork(USE_SSID, USE_PASSWD);
+#endif
+  wfb->configureAccessPoint(CONFIG_SSID, CONFIG_PASSWD);
+
   wfb->startup();
 }
 
