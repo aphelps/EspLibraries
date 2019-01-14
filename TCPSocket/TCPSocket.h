@@ -79,9 +79,11 @@ private:
   byte recvBufferSize;
   uint8_t *recvBuffer;
   byte lastRecvSize;
+  bool partialRecv;
 
   bool checkClient();
   bool validateHeader(tcp_socket_hdr_t *hdr);
+  void printHeader(tcp_socket_hdr_t *hdr, bool dump = false);
 };
 
 #endif // TCPSOCKET_H

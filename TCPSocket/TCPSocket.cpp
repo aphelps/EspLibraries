@@ -47,6 +47,7 @@ void TCPSocket::init(socket_addr_t _address,
 
   recvBufferSize = _recvBufferSize;
   recvBuffer = (uint8_t *)malloc(recvBufferSize);
+  partialRecv = false;
 
   DEBUG3_VALUE("TCPS: Listinging on ", WiFi.localIP().toString());
   DEBUG3_VALUELN(":", _port);
@@ -85,7 +86,7 @@ bool TCPSocket::checkClient() {
   }
   tcpClient = tcpServer->available();
   if (tcpClient) {
-    DEBUG3_VALUELN("TCPS: Connection from", tcpClient.remoteIP().toString());
+    DEBUG3_VALUELN("TCPS: Connection from ", tcpClient.remoteIP().toString());
   }
   return tcpClient;
 }
@@ -143,25 +144,36 @@ const byte *TCPSocket::getMsg(unsigned int *retlen) {
 
 /**
  * Read data from a connected TCP client
+ *
  * @param address Socket address (not IP) to accept data for
  * @param retlen  Data size returned
  * @return        Pointer to the data portion of the message
  */
 const byte *TCPSocket::getMsg(socket_addr_t address, unsigned int *retlen) {
   int result;
-  tcp_socket_hdr_t hdr; // TODO: This should be part of the receive buffer
+  tcp_socket_msg_t *msg = (tcp_socket_msg_t *)recvBuffer;
+  tcp_socket_hdr_t *hdr = &(msg->hdr);
 
   uint32_t start;
   uint8_t *startbytes;
 
   if (!checkClient()) {
-    DEBUG5_PRINTLN("TCPS: get without connection");
-    goto NO_RESULT  ;
+    /* No currently connected client */
+    goto NO_RESULT;
+  }
+
+  if (partialRecv) {
+    /*
+     * If the previous getMsg() call got a header but there was insufficient
+     * data for the complete message then restart from the existing header.
+     */
+    DEBUG5_PRINTLN("TCPS: continuing recv");
+    goto HAVE_HEADER;
   }
 
 START_VALUE:
   /* Read available data until we run out or find a start value */
-  if (tcpClient.available() < sizeof(hdr)) {
+  if (tcpClient.available() < sizeof (tcp_socket_hdr_t)) {
     goto NO_RESULT;
   }
 
@@ -170,8 +182,8 @@ START_VALUE:
   /* Read bytes until the full start value is found */
   start = TCPSOCKET_START;
   startbytes = (uint8_t *)&start;
-  for (byte i = 0; i < sizeof (hdr.start); i++) {
-    uint8_t *val = (uint8_t *)&hdr.start + i;
+  for (byte i = 0; i < sizeof (hdr->start); i++) {
+    uint8_t *val = (uint8_t *)&(hdr->start) + i;
     *val = (uint8_t)tcpClient.read();
     if (*val != startbytes[i]) {
       /* Didn't get the right start byte, restart */
@@ -181,67 +193,74 @@ START_VALUE:
     }
   }
 
-  if (hdr.start != TCPSOCKET_START) {
+  if (hdr->start != TCPSOCKET_START) {
     DEBUG_ERR("TCPS: Should not reach");
     goto ERROR_OUT;
   }
 
   /* A start value has been read, get the remainder of the header */
-  result = tcpClient.read(&(hdr.version),
-          sizeof (hdr) - sizeof (hdr.start));
-  if (result + sizeof (hdr.start) < sizeof (hdr)) {
+  result = tcpClient.read((uint8_t *)hdr + sizeof (hdr->start),
+                          sizeof (tcp_socket_hdr_t) - sizeof (hdr->start));
+  if (result + sizeof (hdr->start) < sizeof (tcp_socket_hdr_t)) {
     DEBUG4_VALUELN("TCPS: recv < hdr sz:", result);
     goto ERROR_OUT;
   }
 
-  DEBUG5_VALUE("TCPS: hdrsz=", result);
-  DEBUG5_PRINT(" hdr=");
+HAVE_HEADER:
+  /*
+   * The full header has been received, validate it before receiving the message
+   * data.
+   */
   DEBUG5_COMMAND(
-    print_hex_buffer((const char *)&hdr, sizeof (hdr))
+          printHeader(hdr);
   );
-  DEBUG_ENDLN();
 
-  if (!validateHeader(&hdr)) {
+  if (!validateHeader(hdr)) {
     DEBUG4_PRINTLN("TCPS: Recv invalid hdr");
     goto ERROR_OUT;
   }
 
-  if (hdr.length > recvBufferSize) {
-    DEBUG4_VALUELN("TCPS: hdr.len > buf sz ", hdr.length);
+  if (hdr->length > recvBufferSize - sizeof (tcp_socket_hdr_t)) {
+    DEBUG4_VALUELN("TCPS: hdr.len > buf sz ", hdr->length);
     goto ERROR_OUT;
   }
 
-  DEBUG5_VALUELN("TCPS: hdr.len:", hdr.length);
-
-  if (tcpClient.available() < hdr.length) {
-    // TODO: This should store the header for the next call
+  if (tcpClient.available() < hdr->length) {
+    /*
+     * The header was received but there is not yet enough data available
+     * to read the entire packet.  The header is stored in the buffer and will
+     * be reused for the next getMsg() call.
+     */
+    partialRecv = true;
     DEBUG5_VALUE("TCPS: Incomplete ", tcpClient.available());
-    DEBUG5_VALUELN("<", hdr.length);
+    DEBUG5_VALUELN("<", hdr->length);
     goto NO_RESULT;
   }
 
-  /* Read the msg data */
-  result = tcpClient.read(recvBuffer, hdr.length);
-  if (result != hdr.length) {
+  partialRecv = false;
+
+  /* Read the message data */
+  result = tcpClient.read(msg->data, hdr->length);
+  if (result != hdr->length) {
     DEBUG4_VALUE("TCPS: recv < hdr.len", result);
-    DEBUG4_VALUELN("<", hdr.length);
+    DEBUG4_VALUELN("<", hdr->length);
     goto ERROR_OUT;
   }
 
   DEBUG5_VALUE("TCPS: data len=", result);
   DEBUG5_COMMAND(
-          print_hex_buffer((const char *)recvBuffer, hdr.length);
+          print_hex_buffer((const char *)msg->data, hdr->length);
   );
   DEBUG_ENDLN();
 
-  if (SOCKET_ADDRESS_MATCH(address, hdr.address)) {
+  if (SOCKET_ADDRESS_MATCH(address, hdr->address)) {
     DEBUG5_PRINTLN("TCPS: getmsg good");
-    *retlen = lastRecvSize = hdr.length;
-    return recvBuffer;
+    *retlen = lastRecvSize = hdr->length;
+    return msg->data;
   }
 
   DEBUG5_VALUE("TCPS: address mismatch: ", address);
-  DEBUG5_VALUELN(",", hdr.address);
+  DEBUG5_VALUELN("!=", hdr->address);
 
 ERROR_OUT:
 
@@ -268,4 +287,23 @@ socket_addr_t TCPSocket::destFromData(void *data) {
 
 bool TCPSocket::connected() {
   return checkClient();
+}
+
+void TCPSocket::printHeader(tcp_socket_hdr_t *hdr, bool dump) {
+  DEBUG3_HEXVAL("TCPS: hdr start:", hdr->start);
+  DEBUG3_VALUE(" ver:", hdr->version);
+  DEBUG3_VALUE(" id:", hdr->ID);
+  DEBUG3_VALUE(" len:", hdr->length);
+  DEBUG3_HEXVAL(" flags:", hdr->flags);
+  DEBUG3_VALUE(" source:", hdr->source);
+  DEBUG3_VALUELN(" dest:", hdr->address);
+
+  if (dump) {
+    DEBUG5_PRINT(" hdr=");
+    DEBUG5_COMMAND(
+            print_hex_buffer((const char *) hdr, sizeof(tcp_socket_hdr_t))
+    );
+    DEBUG_ENDLN();
+  }
+
 }

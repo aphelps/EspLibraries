@@ -27,6 +27,7 @@ WiFiBase::WiFiBase(boolean useStored) {
   _running = false;
   _accessPointEnabled = false;
   _accessPointActive = false;
+  _configPortal = false;
 
   _numKnownNetworks = 0;
   _allocatedKnownNetworks = 0;
@@ -91,6 +92,15 @@ bool WiFiBase::disableAccessPoint() {
     }
   }
   _accessPointEnabled = false;
+  return true;
+}
+
+bool WiFiBase::useConfigPortal(bool configPortal) {
+  if (_accessPointActive) {
+    DEBUG_ERR("WFB: access point is active")
+    return false;
+  }
+  _configPortal = configPortal;
   return true;
 }
 
@@ -204,9 +214,17 @@ bool WiFiBase::startup() {
   }
 
   if (_accessPointEnabled) {
-    /* Failed to connect, launch in AP mode with a config portal */
-    if (_startupAccessPoint()) {
-      return true;
+    /* Failed to connect, launch as an access point */
+    if (_configPortal) {
+      /* Launch in AP mode with a config portal */
+      if (_startupConfigPortal()) {
+        return true;
+      }
+    } else {
+      /* Launch as a simple access point */
+      if (_startupAccessPoint()) {
+        return true;
+      }
     }
   }
 
@@ -269,6 +287,8 @@ bool WiFiBase::_connectToNetwork() {
   }
 
   if (_numKnownNetworks) {
+    // TODO: Should we scan for networks here?
+
     if (_knownNetworks[index].ssid[index] == '\0') {
       /* This indicates to try the ssid stored via the Esp SDK */
       DEBUG3_PRINTLN("WFB: attempting stored network");
@@ -306,8 +326,8 @@ bool WiFiBase::_connectToNetwork() {
  *
  * @return Whether a connection was configured via the config portal
  */
-bool WiFiBase::_startupAccessPoint() {
-  DEBUG3_PRINTLN("WFB: starting AP")
+bool WiFiBase::_startupConfigPortal() {
+  DEBUG3_PRINTLN("WFB: starting config portal");
   WiFiManager wifiManager;
   if (!wifiManager.startConfigPortal(_APSsid, _APPasswd)) {
     DEBUG_ERR("WFB: Config portal failed");
@@ -330,7 +350,27 @@ bool WiFiBase::_startupAccessPoint() {
   return true;
 }
 
-bool WiFiBase::_shutdownAccessPoint() {
+/**
+ * Startup as an access point, but without a configuration portal
+ * @return
+ */
+bool WiFiBase::_startupAccessPoint() {
+  DEBUG3_PRINTLN("WFB: starting AP");
 
-  return false;
+  WiFi.softAP(_APSsid, _APPasswd);
+  DEBUG3_VALUELN("WFB: AP IP:", WiFi.softAPIP());
+
+  _accessPointActive = true;
+  return true;
+}
+
+bool WiFiBase::_shutdownAccessPoint() {
+  if (!_accessPointActive) {
+    return false;
+  }
+
+  WiFi.softAPdisconnect(true);
+
+  _accessPointActive = true;
+  return true;
 }

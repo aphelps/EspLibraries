@@ -9,31 +9,71 @@
 import socket
 import struct
 import binascii
+import argparse
 
-HEADER_FORMAT = "<IBBBHHB"
+
+HEADER_FORMAT = "<IBBBBHH"
 HEADER_LEN = 12
 
+DEFAULT_IP = "192.168.4.1"
+DEFAULT_PORT = 80
+
+def handle_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-a", "--address", dest="address",
+                        help="IP address to connect to", default = DEFAULT_IP)
+
+    parser.add_argument("-p", "--port", dest="port", type=int,
+                        help="Port to connect to",
+                        default=DEFAULT_PORT)
+
+    parser.add_argument("-f", "--fragment", dest="fragment",
+                        action="store_true",
+                        help="Transmit header and data separately", default=False)
+
+    return parser.parse_args()
+
+
+options = handle_args()
+
+print("Connecting to %s:%d" % (options.address, options.port))
+
 sock = socket.socket()
-
-host = "192.168.1.37"  # ESP32 IP in local network
-port = 80              # ESP32 Server Port
-
-sock.connect((host, port))
+sock.connect((options.address, options.port))
 
 id = 0
 while True:
-    message = struct.pack(HEADER_FORMAT + "BBBB",
-                          0x54435053,  # START
-                          1,           # VERSION
-                          id,          # ID
-                          4,           # Data Length
-                          0x12,        # Source addr
-                          128,         # Dest addr
-                          0x56,        # Flags
-                          0xde, 0xad, 0xbe, 0xef)
-    print("Sending: %d:'%s'" %
-          (len(message), binascii.hexlify(message)))
-    sock.send(message)
+    if options.fragment:
+        message = struct.pack(HEADER_FORMAT,
+                              0x54435053,  # START
+                              1,           # VERSION
+                              id,          # ID
+                              4,           # Data Length
+                              0x56,        # Flags
+                              0x12,        # Source addr
+                              128)         # Dest addr
+        print("Sending header: %d:'%s'" %
+              (len(message), binascii.hexlify(message)))
+        sock.send(message)
+
+        message = struct.pack("BBBB",
+                              0xde, 0xad, 0xbe, 0xef)
+        print("Sending data: %d:'%s'" %
+              (len(message), binascii.hexlify(message)))
+        sock.send(message)
+    else:
+        message = struct.pack(HEADER_FORMAT + "BBBB",
+                              0x54435053,  # START
+                              1,           # VERSION
+                              id,          # ID
+                              4,           # Data Length
+                              0x56,        # Flags
+                              0x12,        # Source addr
+                              128,         # Dest addr
+                              0xde, 0xad, 0xbe, 0xef)
+        print("Sending: %d:'%s'" %
+              (len(message), binascii.hexlify(message)))
+        sock.send(message)
 
     data = ""
 

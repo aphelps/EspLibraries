@@ -48,6 +48,10 @@ void setup() {
   wfb->addKnownNetwork(USE_SSID, USE_PASSWD);
 #endif
   wfb->configureAccessPoint(CONFIG_SSID, CONFIG_PASSWD);
+#ifdef CONFIG_PORTAL
+  /* The the WiFiBase to generate an access point hosting a config portal   */
+  wfb->useConfigPortal(true);
+#endif
   while (!wfb->startup()) {
     delay(100);
   }

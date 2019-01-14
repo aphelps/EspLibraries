@@ -10,7 +10,7 @@
  *   An instance of the class is created with appropriate options, the default
  * once startup() is called will launch a "background" process which searches
  * for any known WiFi network from its list to connect to.  On a failure to
- * find a network, it will launch an access point.  The access point provides
+ * find a network, it will launch an access point.  The access point can provide
  * a config portal to allow manual configuration as well as setting up a hub
  * for a mesh network.
  *   By default the class will also provide a port for receiving over-the-air
@@ -41,6 +41,7 @@ class WiFiBase {
 
     bool configBackground(bool background);
     bool configureAccessPoint(const char *ssid, const char *passwd);
+    bool useConfigPortal(bool configPortal);
     bool disableAccessPoint();
 
     static const uint8_t INDEX_DISCONNECTED = (uint8_t)-1;
@@ -63,10 +64,12 @@ class WiFiBase {
     WiFiManager *_wifiManager; // TODO: Should this be a temporary object?
 
     /* Config portal and network hub */
+    bool _configPortal;
     bool _accessPointEnabled;
     bool _accessPointActive;
     const char *_APSsid;
     const char *_APPasswd;
+    bool _startupConfigPortal();
     bool _startupAccessPoint();
     bool _shutdownAccessPoint();
 
