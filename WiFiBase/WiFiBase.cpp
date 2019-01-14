@@ -7,6 +7,9 @@
 #include <Arduino.h>
 #include <WiFi.h>
 
+#ifdef DEBUG_LEVEL_WIFIBASE
+  #define DEBUG_LEVEL DEBUG_LEVEL_WIFIBASE
+#endif
 #ifndef DEBUG_LEVEL
   #define DEBUG_LEVEL DEBUG_HIGH
 #endif
@@ -196,6 +199,7 @@ bool WiFiBase::startup() {
   }
 
   if (_connectToNetwork()) {
+    DEBUG3_VALUELN("WFB: Connected as ", WiFi.localIP().toString());
     return true;
   }
 
