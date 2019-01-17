@@ -46,22 +46,29 @@ class WiFiBase {
 
     static const uint8_t INDEX_DISCONNECTED = (uint8_t)-1;
     static const uint8_t MAX_KNOWN_NETWORKS = 255;
-    bool addKnownNetwork(const char *ssid, const char *passwd);
+    uint8_t addKnownNetwork(const char *ssid, const char *passwd);
     int numKnownNetworks();
-    int lookupKnownNetwork(const char *ssid);
+    uint8_t lookupKnownNetwork(const char *ssid);
     bool hasKnownNetwork(const char *ssid);
+    bool connectAddKnownNetwork(const char *ssid, const char *passwd);
 
     bool setConnectTimeoutMs(unsigned long ms);
+    bool setServerPort(int port);
+    WebServer *getServer();
 
     /* Start WiFiBase */
     bool startup();
     bool connected();
+
+    void handle(); // TODO: Should be done by ticker?
 
   protected:
     bool _running;
     bool _background;
 
     WiFiManager *_wifiManager; // TODO: Should this be a temporary object?
+
+    bool _startupConnect();
 
     /* Config portal and network hub */
     bool _configPortal;
@@ -83,14 +90,28 @@ class WiFiBase {
     unsigned long _connectionTimeoutMs = 5*1000;
     uint8_t _connectedIndex;
     bool _connectToNetwork();
+    bool _connectToNetwork(const char *ssid, const char *passwd);
     Ticker connectStateTicker;
     bool _connectWait();
     void _setConnected(uint8_t index);
     void _setDisconnected();
 
-    /* Over-the-air updates */
-    uint16_t _updatePort;
-    bool _distributeUpdates;
+    int _serverPort = 80;
+    WebServer *_server;
+    bool _createServer();
+
+    /*
+     * Server endpoints
+     */
+    void _handleDocumentation();
+    void _handleInfo();
+    void _handleNetwork();
+    void _handleNotFound();
+    void _handleScan();
+
+    /* TODO: Over-the-air updates */
+    //uint16_t _updatePort;
+    //bool _distributeUpdates;
 };
 
 

@@ -6,6 +6,7 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <ArduinoJson.h>
 
 #ifdef DEBUG_LEVEL_WIFIBASE
   #define DEBUG_LEVEL DEBUG_LEVEL_WIFIBASE
@@ -22,8 +23,8 @@
  */
 WiFiBase::WiFiBase(boolean useStored) {
   _background = true;
-  _APSsid = NULL;
-  _APPasswd = NULL;
+  _APSsid = nullptr;
+  _APPasswd = nullptr;
   _running = false;
   _accessPointEnabled = false;
   _accessPointActive = false;
@@ -31,10 +32,12 @@ WiFiBase::WiFiBase(boolean useStored) {
 
   _numKnownNetworks = 0;
   _allocatedKnownNetworks = 0;
-  _knownNetworks = NULL;
+  _knownNetworks = nullptr;
 
   _connectionTimeoutMs = DEFAULT_CONNECT_TIMEOUT;
   _connectedIndex = INDEX_DISCONNECTED;
+
+  _server = nullptr;
 
   /*
    * If there was a previously connected WiFi, add it as the default known
@@ -55,6 +58,7 @@ WiFiBase::~WiFiBase() {
     free(_knownNetworks[i].ssid);
     free(_knownNetworks[i].passwd);
   }
+  delete _server;
 }
 
 /*******************************************************************************
@@ -112,7 +116,7 @@ bool WiFiBase::useConfigPortal(bool configPortal) {
  * @param passwd
  * @return
  */
-bool WiFiBase::addKnownNetwork(const char *ssid, const char *passwd) {
+uint8_t WiFiBase::addKnownNetwork(const char *ssid, const char *passwd) {
   if (!_allocatedKnownNetworks) {
     _allocatedKnownNetworks = 2;
     _numKnownNetworks = 0;
@@ -120,16 +124,17 @@ bool WiFiBase::addKnownNetwork(const char *ssid, const char *passwd) {
     _knownNetworks = (struct network *)malloc(sizeof(struct network) * _allocatedKnownNetworks);
   } else {
     /* Check if the network is already listed */
-    if (hasKnownNetwork(ssid)) {
+    uint8_t index = lookupKnownNetwork(ssid);
+    if (index != INDEX_DISCONNECTED) {
       DEBUG4_VALUELN("WFB: re-added known ", ssid);
-      return true;
+      return index;
     }
 
     /* Check if reallocation is necessary */
     if (_numKnownNetworks == _allocatedKnownNetworks) {
       if (_numKnownNetworks >= MAX_KNOWN_NETWORKS) {
         DEBUG_ERR("WFB: Hit maximum networks")
-        return false;
+        return INDEX_DISCONNECTED;
       }
 
       /* Increase the size, allocate a new array, and copy from the old array */
@@ -156,6 +161,28 @@ bool WiFiBase::addKnownNetwork(const char *ssid, const char *passwd) {
 
   _numKnownNetworks++;
 
+  return (_numKnownNetworks - (uint8_t)1);
+}
+
+/**
+ * Attempt to connect to a network, adding it as a known one if successful
+ * @param ssid
+ * @param passwd
+ * @return
+ */
+bool WiFiBase::connectAddKnownNetwork(const char *ssid, const char *passwd) {
+  WiFi.begin(ssid, passwd);
+
+  if (!_connectWait()) {
+    DEBUG4_VALUELN("WFB: connectAdd failed ", ssid);
+    return false;
+  }
+
+  DEBUG4_VALUELN("WFB: connectAdd ", ssid);
+
+  uint8_t index = addKnownNetwork(ssid, passwd);
+  _setConnected(index);
+
   return true;
 }
 
@@ -171,8 +198,8 @@ int WiFiBase::numKnownNetworks() {
  * @param ssid
  * @return index of network or INDEX_DISCONNECTED
  */
-int WiFiBase::lookupKnownNetwork(const char *ssid) {
-  for (int i = 0; i < _numKnownNetworks; i++) {
+uint8_t WiFiBase::lookupKnownNetwork(const char *ssid) {
+  for (uint8_t i = 0; i < _numKnownNetworks; i++) {
     if (strcmp(_knownNetworks[i].ssid, ssid) == 0) {
       return i;
     }
@@ -195,6 +222,29 @@ bool WiFiBase::setConnectTimeoutMs(unsigned long ms) {
   return true;
 }
 
+/**
+ * Configure the port that will be used for WiFiBase's management server
+ * @param port
+ * @return
+ */
+bool WiFiBase::setServerPort(int port) {
+  if (_server) {
+    DEBUG_ERR("WFB: server is active");
+    return false;
+  }
+
+  _serverPort = port;
+
+  return true;
+}
+
+/**
+ * Return the webserver, to allow endpoints to be added by other code
+ */
+WebServer* WiFiBase::getServer() {
+  return _server;
+}
+
 /*******************************************************************************
  * Operational functions
  */
@@ -203,10 +253,8 @@ bool WiFiBase::setConnectTimeoutMs(unsigned long ms) {
  *
  * @return
  */
-bool WiFiBase::startup() {
-  if (_background) {
-    /* TODO: Set this to running in the background */
-  }
+bool WiFiBase::_startupConnect() {
+
 
   if (_connectToNetwork()) {
     DEBUG3_VALUELN("WFB: Connected as ", WiFi.localIP().toString());
@@ -223,12 +271,26 @@ bool WiFiBase::startup() {
     } else {
       /* Launch as a simple access point */
       if (_startupAccessPoint()) {
+        _createServer();
         return true;
       }
     }
   }
 
   return false;
+}
+
+bool WiFiBase::startup() {
+  if (_background) {
+    /* TODO: Set this to running in the background */
+  }
+
+  if (!_startupConnect()) {
+    return false;
+  }
+
+  _createServer();
+  return true;
 }
 
 /**
@@ -317,6 +379,11 @@ bool WiFiBase::_connectToNetwork() {
   return false;
 }
 
+bool WiFiBase::_connectToNetwork(const char *ssid, const char *passwd) {
+  WiFi.begin(ssid, passwd);
+  return _connectWait();
+}
+
 /**
  * Start as access point with a config portal to allow manual network
  * configuration
@@ -373,4 +440,123 @@ bool WiFiBase::_shutdownAccessPoint() {
 
   _accessPointActive = true;
   return true;
+}
+
+/**
+ * Startup the management server
+ * @return
+ */
+bool WiFiBase::_createServer() {
+  if (!_server) {
+      _server = new WebServer(_serverPort);
+      if (!_server) {
+        DEBUG_ERR("WFB: alloc failure");
+        return false;
+      }
+
+      DEBUG4_VALUELN("WFB: server on ", _serverPort);
+
+      _server->on("/documentation", std::bind(&WiFiBase::_handleDocumentation, this));
+      _server->on("/info", std::bind(&WiFiBase::_handleInfo, this));
+      _server->on("/network", std::bind(&WiFiBase::_handleNetwork, this));
+      _server->on("/scan", std::bind(&WiFiBase::_handleScan, this));
+      _server->onNotFound(std::bind(&WiFiBase::_handleNotFound, this));
+      _server->begin();
+      return true;
+  }
+
+  return true;
+}
+
+/**
+ * Endpoint handler to get documentation for the server
+ */
+void WiFiBase::_handleDocumentation() {
+  DEBUG4_PRINTLN("WFB: /documentation");
+
+  String response = "{\"/documentation\":{},";
+  response += "\"/info\":{},";
+  response += "\"/network\":{\"description\":\"connect to network\",\"args\":[\"ssid\",\"passwd\"]},";
+  response += "\"/scan\":{}";
+  response += "}";
+
+  _server->send(200, "application/json", response);
+}
+
+void WiFiBase::_handleInfo() {
+  DEBUG4_PRINTLN("WFB: /info");
+  _server->send(200, "text/text", "This is info");
+}
+
+void WiFiBase::_handleNotFound() {
+  DEBUG4_VALUELN("WFB: notFound:", _server->uri());
+
+  String response = "Endpoint " + _server->uri() + " not defined";
+  _server->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  _server->sendHeader("Pragma", "no-cache");
+  _server->sendHeader("Expires", "-1");
+  _server->sendHeader("Content-Length", String(response.length()));
+  _server->send ( 404, "text/plain", response );
+}
+
+/**
+ * Attempt to connect to a network specified by the arguments, adding it to
+ * the known networks on successful connect.
+ */
+void WiFiBase::_handleNetwork() {
+  String ssid = _server->arg("ssid");
+  String passwd = _server->arg("passwd");
+
+  DEBUG4_VALUELN("WFB: /network ", ssid);
+
+  String response;
+  if (connectAddKnownNetwork(ssid.c_str(), passwd.c_str())) {
+    response = "Connected to " + ssid;
+    _server->send(200, "text/text", response);
+  } else {
+    response = "Failed to connect to " + ssid;
+    _server->send(400, "text/text", response);
+  }
+}
+
+/**
+ * Scan for networks and return the networks
+ */
+void WiFiBase::_handleScan() {
+
+  long start = millis();
+  int networks = WiFi.scanNetworks();
+
+  DEBUG4_VALUELN("WFB: /scan elapsed", millis() - start);
+
+  String response = "{\"count\": ";
+  response += networks;
+  response += ",\"networks\":[";
+
+  if (networks) {
+    for (int i = 0; i < networks; i++) {
+      response += "[\"" + WiFi.SSID(i) + "\",";
+      response += WiFi.RSSI(i);
+      response += ",";
+      response += (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "\"\"":"\"*\"";
+      response += "]";
+      if (i != networks - 1) {
+        response += ",";
+      }
+    }
+  }
+
+  response += "]}";
+
+  _server->send(200, "application/json", response);
+}
+
+/**
+ * Perform repetitive tasks
+ * TODO: This should be done via ticker
+ */
+void WiFiBase::handle() {
+
+  /* Check for HTTP requests */
+  _server->handleClient();
 }

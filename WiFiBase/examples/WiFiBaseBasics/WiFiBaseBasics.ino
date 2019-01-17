@@ -45,17 +45,25 @@ void setup() {
 #ifdef USE_SSID
   wfb->addKnownNetwork(USE_SSID, USE_PASSWD);
 #endif
+#ifdef CONFIG_PORTAL
+  /* The the WiFiBase to generate an access point hosting a config portal */
+  wfb->useConfigPortal(true);
+#endif
   wfb->configureAccessPoint(CONFIG_SSID, CONFIG_PASSWD);
 
   wfb->startup();
 }
 
 bool value = 1;
+unsigned long blink = 0;
 void loop() {
-  if (wfb->connected()) {
+  unsigned long now = millis();
+  if (wfb->connected() && (now - blink > 500)) {
     // put your main code here, to run repeatedly:
     digitalWrite(STATUS_LED, value);
     value = !value;
-    delay(500);
+    blink = now;
   }
+
+  wfb->handle();
 }

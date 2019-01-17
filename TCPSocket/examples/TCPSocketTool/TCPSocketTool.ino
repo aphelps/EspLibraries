@@ -28,7 +28,7 @@
   #define ADDRESS 128
 #endif
 #ifndef PORT
-  #define PORT 80
+  #define PORT TCPSOCKET_PORT
 #endif
 
 #define DATA_SIZE 64
@@ -49,7 +49,7 @@ void setup() {
 #endif
   wfb->configureAccessPoint(CONFIG_SSID, CONFIG_PASSWD);
 #ifdef CONFIG_PORTAL
-  /* The the WiFiBase to generate an access point hosting a config portal   */
+  /* The the WiFiBase to generate an access point hosting a config portal */
   wfb->useConfigPortal(true);
 #endif
   while (!wfb->startup()) {

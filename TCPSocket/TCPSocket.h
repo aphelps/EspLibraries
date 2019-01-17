@@ -38,17 +38,21 @@ typedef struct {
 #define TCP_BUFFER_TOTAL(x) (uint8_t)(x + sizeof (tcp_socket_hdr_t))
 #define TCP_DATA_LENGTH(x) (uint8_t)(x - sizeof (tcp_socket_hdr_t))
 
+#define TCPSOCKET_PORT 4081
+
+
 class TCPSocket : public Socket {
 
 public:
+
   /* TCP specific functions */
   TCPSocket();
   ~TCPSocket();
   TCPSocket(socket_addr_t _address,
-            uint16_t _port,
+            uint16_t _port = TCPSOCKET_PORT,
             byte _recvBufferSize = DEFAULT_RECEIVE_BUFFER);
   void init(socket_addr_t _address,
-            uint16_t _port,
+            uint16_t _port = TCPSOCKET_PORT,
             byte _recvBufferSize = DEFAULT_RECEIVE_BUFFER);
 
   /*

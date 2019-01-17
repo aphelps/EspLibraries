@@ -16,7 +16,8 @@ HEADER_FORMAT = "<IBBBBHH"
 HEADER_LEN = 12
 
 DEFAULT_IP = "192.168.4.1"
-DEFAULT_PORT = 80
+DEFAULT_PORT = 4081
+
 
 def handle_args():
     parser = argparse.ArgumentParser()
