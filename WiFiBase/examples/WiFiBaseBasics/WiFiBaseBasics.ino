@@ -65,5 +65,5 @@ void loop() {
     blink = now;
   }
 
-  wfb->handle();
+  wfb->checkServer();
 }

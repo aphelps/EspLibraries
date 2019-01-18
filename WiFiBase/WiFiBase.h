@@ -60,7 +60,8 @@ class WiFiBase {
     bool startup();
     bool connected();
 
-    void handle(); // TODO: Should be done by ticker?
+    /* Check the web server for traffic */
+    void checkServer();
 
   protected:
     bool _running;
@@ -91,7 +92,6 @@ class WiFiBase {
     uint8_t _connectedIndex;
     bool _connectToNetwork();
     bool _connectToNetwork(const char *ssid, const char *passwd);
-    Ticker connectStateTicker;
     bool _connectWait();
     void _setConnected(uint8_t index);
     void _setDisconnected();
