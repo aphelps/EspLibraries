@@ -41,14 +41,16 @@ void setup() {
   digitalWrite(BUILTIN_LED, LOW);
   digitalWrite(STATUS_LED, LOW);
 
-  wfb = new WiFiBase(false);
+  wfb = new WiFiBase(false); /* True = use saved connection */
 #ifdef USE_SSID
   wfb->addKnownNetwork(USE_SSID, USE_PASSWD);
 #endif
+
 #ifdef CONFIG_PORTAL
   /* The the WiFiBase to generate an access point hosting a config portal */
   wfb->useConfigPortal(true);
 #endif
+
   wfb->configureAccessPoint(CONFIG_SSID, CONFIG_PASSWD);
 
   wfb->startup();
@@ -58,11 +60,18 @@ bool value = 1;
 unsigned long blink = 0;
 void loop() {
   unsigned long now = millis();
-  if (wfb->connected() && (now - blink > 500)) {
-    // put your main code here, to run repeatedly:
-    digitalWrite(STATUS_LED, value);
-    value = !value;
+
+  if (now - blink > 500) {
+    /* Update the timer */
     blink = now;
+    if (wfb->connected()) {
+      /* Blink the status LED while connected */
+      digitalWrite(STATUS_LED, value);
+      value = !value;
+    } else {
+      /* Attempt to connect again */
+      wfb->startup();
+    }
   }
 
   wfb->checkServer();

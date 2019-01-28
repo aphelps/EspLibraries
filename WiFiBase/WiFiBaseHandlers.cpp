@@ -64,7 +64,21 @@ void WiFiBase::_handleDocumentation() {
 
 void WiFiBase::_handleInfo() {
   DEBUG4_PRINTLN("WFB: /info");
-  String response = "{\"response\":\"This is info\"}";
+
+  String response = "{\"connected\":";
+  response += connected() ? "true" : "false";
+  response += ",\"connect_ssid\":\"";
+  response += connected() ? WiFi.SSID() : "none";
+  response += "\",\"local_IP\":\"";
+  response += WiFi.localIP().toString();
+  response += "\",\"access_point\":\"";
+  response += _accessPointActive ? "true" : "false";
+  response += "\",\"AP_ssid\":\"";
+  response += _APSsid;
+  response += "\",\"AP_IP\":\"";
+  response += WiFi.softAPIP().toString();
+  response += "\"}";
+
   _server->send(200, "application/json", response);
 }
 
@@ -101,6 +115,8 @@ void WiFiBase::_handleNetwork() {
   elapsed = millis() - elapsed;
   response += ",\"ssid\":\"";
   response += ssid;
+  response += "\",\"local_IP\":\"";
+  response += WiFi.localIP().toString();
   response += "\",\"elapsed\":";
   response += elapsed;
 

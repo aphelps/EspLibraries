@@ -177,7 +177,8 @@ bool WiFiBase::connectAddKnownNetwork(const char *ssid, const char *passwd) {
     return false;
   }
 
-  DEBUG4_VALUELN("WFB: connectAdd ", ssid);
+  DEBUG4_VALUE("WFB: connectAdd ssid:", ssid);
+  DEBUG4_VALUELN(" localIP:", WiFi.localIP());
 
   uint8_t index = addKnownNetwork(ssid, passwd);
   _setConnected(index);
@@ -371,10 +372,11 @@ bool WiFiBase::_connectToNetwork() {
         return true;
       }
     }
+
+    DEBUG3_PRINTLN("WFB: Failed connect");
+    _setDisconnected();
   }
 
-  DEBUG3_PRINTLN("WFB: Failed connect");
-  _setDisconnected();
   return false;
 }
 
@@ -421,12 +423,15 @@ bool WiFiBase::_startupConfigPortal() {
  * @return
  */
 bool WiFiBase::_startupAccessPoint() {
-  DEBUG3_PRINTLN("WFB: starting AP");
+  if (!_accessPointActive) {
+    DEBUG3_PRINTLN("WFB: starting AP");
 
-  WiFi.softAP(_APSsid, _APPasswd);
-  DEBUG3_VALUELN("WFB: AP IP:", WiFi.softAPIP());
+    WiFi.softAP(_APSsid, _APPasswd);
+    DEBUG3_VALUELN("WFB: AP IP:", WiFi.softAPIP());
 
-  _accessPointActive = true;
+    _accessPointActive = true;
+  }
+
   return true;
 }
 

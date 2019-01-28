@@ -6,8 +6,11 @@
  * Copyright: 2018
  */
 
+#ifdef DEBUG_LEVEL_TCPSOCKETTOOL
+  #define DEBUG_LEVEL DEBUG_LEVEL_TCPSOCKETTOOL
+#endif
 #ifndef DEBUG_LEVEL
-#define DEBUG_LEVEL DEBUG_HIGH
+  #define DEBUG_LEVEL DEBUG_HIGH
 #endif
 #include "Debug.h"
 
