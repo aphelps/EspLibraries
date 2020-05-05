@@ -25,7 +25,9 @@
   #define CONFIG_PASSWD "12345678"
 #endif
 
-#define STATUS_LED 23
+#ifndef STATUS_LED
+#define STATUS_LED 25
+#endif
 
 WiFiBase *wfb;
 
@@ -58,6 +60,8 @@ void setup() {
 
 bool value = 1;
 unsigned long blink = 0;
+
+unsigned long print = 0;
 void loop() {
   unsigned long now = millis();
 
@@ -72,6 +76,11 @@ void loop() {
       /* Attempt to connect again */
       wfb->startup();
     }
+  }
+
+  if (now - print > 5000) {
+    DEBUG1_PRINTLN("Update");
+    print = now;
   }
 
   wfb->checkServer();

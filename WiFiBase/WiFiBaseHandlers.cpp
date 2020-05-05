@@ -34,11 +34,13 @@ bool WiFiBase::_createServer() {
 
     DEBUG4_VALUELN("WFB: server on ", _serverPort);
 
-    _server->on("/documentation", std::bind(&WiFiBase::_handleDocumentation, this));
-    _server->on("/info", std::bind(&WiFiBase::_handleInfo, this));
-    _server->on("/network", std::bind(&WiFiBase::_handleNetwork, this));
-    _server->on("/scan", std::bind(&WiFiBase::_handleScan, this));
+    addRESTEndpoint("/documentation", std::bind(&WiFiBase::_handleDocumentation, this));
+    addRESTEndpoint("/info", std::bind(&WiFiBase::_handleInfo, this));
+    addRESTEndpoint("/network", std::bind(&WiFiBase::_handleNetwork, this));
+    addRESTEndpoint("/scan", std::bind(&WiFiBase::_handleScan, this));
+
     _server->onNotFound(std::bind(&WiFiBase::_handleNotFound, this));
+
     _server->begin();
 
     return true;
@@ -48,9 +50,20 @@ bool WiFiBase::_createServer() {
 }
 
 /**
+ * Add a REST endpoint
+ * @param endPoint
+ * @param handler
+ */
+void WiFiBase::addRESTEndpoint(const String &endPoint,
+                               WebServer::THandlerFunction handler) {
+  _server->on(endPoint, handler);
+}
+
+/**
  * Endpoint handler to get documentation for the server
  */
 void WiFiBase::_handleDocumentation() {
+  // TODO: Build documentation with addRESTEndpoint
   DEBUG4_PRINTLN("WFB: /documentation");
 
   String response = "{\"/documentation\":{},";
@@ -71,9 +84,9 @@ void WiFiBase::_handleInfo() {
   response += connected() ? WiFi.SSID() : "none";
   response += "\",\"local_IP\":\"";
   response += WiFi.localIP().toString();
-  response += "\",\"access_point\":\"";
+  response += "\",\"access_point\":";
   response += _accessPointActive ? "true" : "false";
-  response += "\",\"AP_ssid\":\"";
+  response += ",\"AP_ssid\":\"";
   response += _APSsid;
   response += "\",\"AP_IP\":\"";
   response += WiFi.softAPIP().toString();

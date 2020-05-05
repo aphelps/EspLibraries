@@ -20,6 +20,7 @@
  * Notes:
  *   - Use the Update and ArduinoOTA libraries?
  *   - Wifi configuration from WiFiManager (TODO: link)
+ *   - Actually do back-grounding of blocking processes
  */
 
 #ifndef WIFIBASE_H
@@ -62,6 +63,10 @@ class WiFiBase {
 
     /* Check the web server for traffic */
     void checkServer();
+
+    /* REST API configuration */
+    void addRESTEndpoint(const String &endPoint,
+                         WebServer::THandlerFunction handler);
 
   protected:
     bool _running;
