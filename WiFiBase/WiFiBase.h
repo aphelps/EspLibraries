@@ -66,7 +66,8 @@ class WiFiBase {
 
     /* REST API configuration */
     void addRESTEndpoint(const String &endPoint,
-                         WebServer::THandlerFunction handler);
+                         WebServer::THandlerFunction handler,
+                         const String &docString);
 
   protected:
     bool _running;
@@ -113,6 +114,8 @@ class WiFiBase {
     void _handleNetwork();
     void _handleNotFound();
     void _handleScan();
+
+    String documentation; // REST Endpoint documentation json
 
     /* TODO: Over-the-air updates */
     //uint16_t _updatePort;

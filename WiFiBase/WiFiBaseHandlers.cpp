@@ -34,10 +34,12 @@ bool WiFiBase::_createServer() {
 
     DEBUG4_VALUELN("WFB: server on ", _serverPort);
 
-    addRESTEndpoint("/documentation", std::bind(&WiFiBase::_handleDocumentation, this));
-    addRESTEndpoint("/info", std::bind(&WiFiBase::_handleInfo, this));
-    addRESTEndpoint("/network", std::bind(&WiFiBase::_handleNetwork, this));
-    addRESTEndpoint("/scan", std::bind(&WiFiBase::_handleScan, this));
+    addRESTEndpoint("/documentation",
+                    std::bind(&WiFiBase::_handleDocumentation, this), "");
+    addRESTEndpoint("/info", std::bind(&WiFiBase::_handleInfo, this), "");
+    addRESTEndpoint("/network", std::bind(&WiFiBase::_handleNetwork, this),
+                    "\"description\":\"connect to network\",\"args\":[\"ssid\",\"passwd\"]");
+    addRESTEndpoint("/scan", std::bind(&WiFiBase::_handleScan, this), "");
 
     _server->onNotFound(std::bind(&WiFiBase::_handleNotFound, this));
 
@@ -53,23 +55,29 @@ bool WiFiBase::_createServer() {
  * Add a REST endpoint
  * @param endPoint
  * @param handler
+ * @param docString
  */
 void WiFiBase::addRESTEndpoint(const String &endPoint,
-                               WebServer::THandlerFunction handler) {
+                               WebServer::THandlerFunction handler,
+                               const String &docString) {
   _server->on(endPoint, handler);
+
+  if (documentation.length() > 0) {
+    documentation += ",";
+  }
+  documentation += "\"" + endPoint + "\":{";
+  documentation += docString + "}";
 }
 
 /**
- * Endpoint handler to get documentation for the server
+ * Endpoint handler to get documentation for the REST endpoints, indivudally
+ * added via addRESTEndpoint
  */
 void WiFiBase::_handleDocumentation() {
-  // TODO: Build documentation with addRESTEndpoint
   DEBUG4_PRINTLN("WFB: /documentation");
 
-  String response = "{\"/documentation\":{},";
-  response += "\"/info\":{},";
-  response += "\"/network\":{\"description\":\"connect to network\",\"args\":[\"ssid\",\"passwd\"]},";
-  response += "\"/scan\":{}";
+  String response = "{";
+  response += documentation;
   response += "}";
 
   _server->send(200, "application/json", response);
