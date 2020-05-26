@@ -44,7 +44,7 @@ WiFiBase::WiFiBase(boolean useStored) {
    */
   if (useStored && WiFi.SSID()) {
     DEBUG4_VALUELN("WFB: adding default network ", WiFi.SSID());
-    addKnownNetwork("\0", "\0");
+    addKnownNetwork(WiFi.SSID().c_str(), "\0");
   }
 
   DEBUG5_PRINTLN("WFB: Created");
@@ -125,7 +125,7 @@ uint8_t WiFiBase::addKnownNetwork(const char *ssid, const char *passwd) {
     /* Check if the network is already listed */
     uint8_t index = lookupKnownNetwork(ssid);
     if (index != INDEX_DISCONNECTED) {
-      DEBUG4_VALUELN("WFB: re-added known ", ssid);
+      DEBUG4_VALUELN("WFB: re-added known ssid:", ssid);
       return index;
     }
 

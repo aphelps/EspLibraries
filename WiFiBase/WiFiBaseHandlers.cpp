@@ -40,6 +40,8 @@ bool WiFiBase::_createServer() {
     addRESTEndpoint("/network", std::bind(&WiFiBase::_handleNetwork, this),
                     "\"description\":\"connect to network\",\"args\":[\"ssid\",\"passwd\"]");
     addRESTEndpoint("/scan", std::bind(&WiFiBase::_handleScan, this), "");
+    addRESTEndpoint("/known", std::bind(&WiFiBase::_handleListKnownNetworks, this),
+                    "\"description\":\"List all known networks\"" );
 
     _server->onNotFound(std::bind(&WiFiBase::_handleNotFound, this));
 
@@ -176,6 +178,26 @@ void WiFiBase::_handleScan() {
   }
 
   WiFi.scanDelete();
+
+  response += "]}";
+
+  _server->send(200, "application/json", response);
+}
+
+void WiFiBase::_handleListKnownNetworks() {
+
+  String response = "{\"count\":";
+  response += _numKnownNetworks;
+  response += ",\"networks\":[";
+
+  DEBUG3_PRINT("XXX: known ")
+
+  for (int network = 0; network < _numKnownNetworks; network++) {
+    response += "\"";
+    response += _knownNetworks[network].ssid;
+    DEBUG3_VALUELN(" ", _knownNetworks[network].ssid)
+    response += "\"";
+  }
 
   response += "]}";
 

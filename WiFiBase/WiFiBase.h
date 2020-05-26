@@ -114,6 +114,7 @@ class WiFiBase {
     void _handleNetwork();
     void _handleNotFound();
     void _handleScan();
+    void _handleListKnownNetworks();
 
     String documentation; // REST Endpoint documentation json
 
