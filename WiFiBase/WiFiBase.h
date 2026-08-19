@@ -4,7 +4,7 @@
  * Copyright: 2018
  *
  * This library provides a base from which to handle connecting to a Wifi
- * network as well as updating firmware via that network.
+ * network.
  *
  * Design:
  *   An instance of the class is created with appropriate options, the default
@@ -13,12 +13,18 @@
  * find a network, it will launch an access point.  The access point can provide
  * a config portal to allow manual configuration as well as setting up a hub
  * for a mesh network.
- *   By default the class will also provide a port for receiving over-the-air
+ *
+ *   NOTE: this class provides NO over-the-air update support.  This comment
+ * used to claim that it "will also provide a port for receiving over-the-air
  * firmware updates, and optionally redistribute those updates when acting as a
- * hub.
+ * hub" — that was a description of an intention, not of the code, and the class
+ * has never had an OTA method of any kind.  A caller that needs OTA builds it
+ * on getServer(), as HMTL_Fire_Control does with a guarded /update endpoint.
  *
  * Notes:
- *   - Use the Update and ArduinoOTA libraries?
+ *   - OTA is deliberately left to the caller: the guards that make an update
+ *     safe are application knowledge (is anything running? is it safe to
+ *     reboot?), and a generic library cannot answer those questions.
  *   - Wifi configuration from WiFiManager (TODO: link)
  *   - Actually do back-grounding of blocking processes
  */
