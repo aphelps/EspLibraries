@@ -4,6 +4,7 @@ cscope.*
 *.pyc
 *~
 \#*
+.pio/
 .pioenvs
 .sconsign*
 .idea

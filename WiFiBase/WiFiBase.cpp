@@ -21,7 +21,7 @@
  * Create a default WifiBase object
  */
 WiFiBase::WiFiBase(boolean useStored) {
-  _background = true;
+  _background = false;
   _APSsid = nullptr;
   _APPasswd = nullptr;
   _running = false;
@@ -37,6 +37,9 @@ WiFiBase::WiFiBase(boolean useStored) {
   _connectedIndex = INDEX_DISCONNECTED;
 
   _server = nullptr;
+
+  _authPasswd = nullptr;
+  _allowUnauthConfig = false;
 
   /*
    * If there was a previously connected WiFi, add it as the default known
@@ -64,9 +67,19 @@ WiFiBase::~WiFiBase() {
  * Configuration functions
  */
 
+/*
+ * Background startup is not implemented: startup() is synchronous and blocks up to the
+ * connect timeout per known network. Refuse the request rather than accepting a flag that
+ * does nothing — a caller that needs a non-blocking bring-up must run startup() on its own
+ * task. (_background stays false until an implementation exists.)
+ */
 bool WiFiBase::configBackground(bool background) {
   if (_running) {
     DEBUG_ERR("WFB: already running");
+    return false;
+  }
+  if (background) {
+    DEBUG_ERR("WFB: background startup not implemented");
     return false;
   }
   _background = background;
@@ -76,6 +89,12 @@ bool WiFiBase::configBackground(bool background) {
 bool WiFiBase::configureAccessPoint(const char *ssid, const char *passwd) {
   if (_accessPointActive) {
     DEBUG_ERR("WFB: access point is active");
+    return false;
+  }
+  /* softAP requires >=8 chars for WPA2; a shorter password is silently ignored by the SDK
+   * and the AP comes up OPEN. Refuse it here rather than shipping an open AP. */
+  if (passwd && passwd[0] != '\0' && strlen(passwd) < 8) {
+    DEBUG_ERR("WFB: AP password must be >=8 chars (WPA2)");
     return false;
   }
   DEBUG3_VALUE("WFB: config AP ", ssid);
@@ -217,6 +236,20 @@ bool WiFiBase::hasKnownNetwork(const char *ssid) {
   return (lookupKnownNetwork(ssid) != INDEX_DISCONNECTED);
 }
 
+bool WiFiBase::setAuthPassword(const char *passwd) {
+  if (passwd == nullptr || passwd[0] == '\0') {
+    DEBUG_ERR("WFB: empty auth password");
+    return false;
+  }
+  _authPasswd = passwd;
+  return true;
+}
+
+bool WiFiBase::allowUnauthenticatedConfig(bool allow) {
+  _allowUnauthConfig = allow;
+  return true;
+}
+
 bool WiFiBase::setConnectTimeoutMs(unsigned long ms) {
   _connectionTimeoutMs = ms;
   return true;
@@ -351,7 +384,7 @@ bool WiFiBase::_connectToNetwork() {
   if (_numKnownNetworks) {
     // TODO: Should we scan for networks here?
 
-    if (_knownNetworks[index].ssid[index] == '\0') {
+    if (_knownNetworks[index].ssid[0] == '\0') {
       /* This indicates to try the ssid stored via the Esp SDK */
       DEBUG3_PRINTLN("WFB: attempting stored network");
       WiFi.begin();
@@ -442,7 +475,7 @@ bool WiFiBase::_shutdownAccessPoint() {
 
   WiFi.softAPdisconnect(true);
 
-  _accessPointActive = true;
+  _accessPointActive = false;
   return true;
 }
 
