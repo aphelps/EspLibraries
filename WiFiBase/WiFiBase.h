@@ -35,6 +35,14 @@ struct network {
   char *passwd;
 };
 
+/*
+ * WiFiBase owns heap state (_knownNetworks, _server) and its destructor frees it and
+ * disconnects WiFi, but the class has no copy constructor or copy assignment: assigning a
+ * temporary (`wfb = WiFiBase()`) memberwise-copies the pointers and then the temporary's
+ * destructor frees them, leaving the assigned object dangling. Construct one instance in
+ * place and configure it. (Copy operations become `= delete` once existing callers that
+ * copy-assign are migrated.)
+ */
 class WiFiBase {
   public:
     WiFiBase(boolean useStored = true);
@@ -44,6 +52,18 @@ class WiFiBase {
     bool configureAccessPoint(const char *ssid, const char *passwd);
     bool useConfigPortal(bool configPortal);
     bool disableAccessPoint();
+
+    /*
+     * Endpoints that change WiFi state or disclose stored networks (/network, /scan,
+     * /known) require HTTP Basic auth (user "admin") once a password is set. With no
+     * password set and no explicit opt-out they respond 403 — secure by default; a
+     * caller that wants the old open behaviour must say so.
+     */
+    bool setAuthPassword(const char *passwd);
+    bool allowUnauthenticatedConfig(bool allow);
+    /* Run the same authorization for a caller-added endpoint; sends the 401/403
+     * response itself when refusing, so the handler just returns. */
+    bool authorizeConfigRequest();
 
     static const uint8_t INDEX_DISCONNECTED = (uint8_t)-1;
     static const uint8_t MAX_KNOWN_NETWORKS = 255;
@@ -105,6 +125,11 @@ class WiFiBase {
     int _serverPort = 80;
     WebServer *_server;
     bool _createServer();
+
+    /* Auth for state-changing/disclosing endpoints */
+    const char *_authPasswd;
+    bool _allowUnauthConfig;
+    bool _authorizedConfig();
 
     /*
      * Server endpoints

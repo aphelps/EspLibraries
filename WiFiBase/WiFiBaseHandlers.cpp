@@ -62,6 +62,12 @@ bool WiFiBase::_createServer() {
 void WiFiBase::addRESTEndpoint(const String &endPoint,
                                WebServer::THandlerFunction handler,
                                const String &docString) {
+  /* _server exists only after a successful _createServer(); with no network and no AP
+   * there is no server, and registering must be a no-op rather than a null deref. */
+  if (!_server) {
+    DEBUG_ERR("WFB: addRESTEndpoint without server");
+    return;
+  }
   _server->on(endPoint, handler);
 
   if (documentation.length() > 0) {
@@ -116,11 +122,42 @@ void WiFiBase::_handleNotFound() {
   _server->send ( 404, "text/plain", response );
 }
 
+/*
+ * Authorization for endpoints that change WiFi state or disclose stored networks.
+ * With a password set: HTTP Basic (user "admin"). With none set: refuse with 403
+ * unless the caller explicitly allowed unauthenticated config.
+ */
+bool WiFiBase::_authorizedConfig() {
+  if (_allowUnauthConfig) {
+    return true;
+  }
+  if (_authPasswd == nullptr) {
+    _server->send(403, "application/json",
+                  "{\"error\":\"no auth password configured\"}");
+    return false;
+  }
+  if (!_server->authenticate("admin", _authPasswd)) {
+    _server->requestAuthentication();
+    return false;
+  }
+  return true;
+}
+
+bool WiFiBase::authorizeConfigRequest() {
+  if (!_server) {
+    return false;
+  }
+  return _authorizedConfig();
+}
+
 /**
  * Attempt to connect to a network specified by the arguments, adding it to
  * the known networks on successful connect.
  */
 void WiFiBase::_handleNetwork() {
+  if (!_authorizedConfig()) {
+    return;
+  }
   int result = 200;
   String ssid = _server->arg("ssid");
   String passwd = _server->arg("passwd");
@@ -152,6 +189,9 @@ void WiFiBase::_handleNetwork() {
  * Scan for networks and return the networks
  */
 void WiFiBase::_handleScan() {
+  if (!_authorizedConfig()) {
+    return;
+  }
 
   long start = millis();
   int networks = WiFi.scanNetworks();
@@ -185,17 +225,20 @@ void WiFiBase::_handleScan() {
 }
 
 void WiFiBase::_handleListKnownNetworks() {
+  if (!_authorizedConfig()) {
+    return;
+  }
 
   String response = "{\"count\":";
   response += _numKnownNetworks;
   response += ",\"networks\":[";
 
-  DEBUG3_PRINT("XXX: known ")
-
   for (int network = 0; network < _numKnownNetworks; network++) {
+    if (network > 0) {
+      response += ",";
+    }
     response += "\"";
     response += _knownNetworks[network].ssid;
-    DEBUG3_VALUELN(" ", _knownNetworks[network].ssid)
     response += "\"";
   }
 
@@ -209,6 +252,9 @@ void WiFiBase::_handleListKnownNetworks() {
  * TODO: This should be done via ticker
  */
 void WiFiBase::checkServer() {
+  if (!_server) {
+    return;
+  }
 
   /* Check for HTTP requests */
   _server->handleClient();
