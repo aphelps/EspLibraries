@@ -14,12 +14,9 @@
  * a config portal to allow manual configuration as well as setting up a hub
  * for a mesh network.
  *
- *   NOTE: this class provides NO over-the-air update support.  This comment
- * used to claim that it "will also provide a port for receiving over-the-air
- * firmware updates, and optionally redistribute those updates when acting as a
- * hub" — that was a description of an intention, not of the code, and the class
- * has never had an OTA method of any kind.  A caller that needs OTA builds it
- * on getServer(), as HMTL_Fire_Control does with a guarded /update endpoint.
+ *   NOTE: this class provides NO over-the-air update support.  A caller that
+ * needs OTA builds it on getServer(), as HMTL_Fire_Control does with a guarded
+ * /update endpoint.
  *
  * Notes:
  *   - OTA is deliberately left to the caller: the guards that make an update
